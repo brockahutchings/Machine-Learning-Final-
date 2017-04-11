@@ -1,0 +1,358 @@
+#Practical Machine Learning Course Project Report 
+##By: Brock HUtchings     11/04/2017
+  
+The following report was created as an assingment for the practical machine leatninig course from Johns Hopkins university  
+
+
+## Background:  
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is
+
+available from the website here: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).   
+
+
+## Data Sources:
+
+The training data for this project is available here:  
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) 
+
+The test data is available here:  
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)  
+
+The data for this project comes from this original source: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har). 
+
+## Intended Results: 
+
+The goal of this project is to predict the manner in which users performed the exercise.
+
+
+## Set Up Environment:
+
+####Install any packagess noton your system
+```{r warning=FALSE, error=FALSE}
+#####  ONLY INSTALL PACKAGES YOU ARE MISSING #########
+
+#install.packages("rattle")
+
+#install.packages("rpart")
+
+#install.packages("rpart.plot")
+
+#install.packages("corrplot")
+
+#install.packages("randomForest")
+
+#install.packages("e1071")
+``` 
+
+####oad required packages  
+```{r warning=FALSE, error=FALSE}
+library(rattle)
+
+library(caret)
+
+library(rpart)
+
+library(rpart.plot)
+
+library(corrplot)
+
+library(randomForest)
+
+library(RColorBrewer)
+```  
+
+####Load the seed 
+```{r warning=FALSE, error=FALSE}
+set.seed(56789)
+```  
+
+
+
+##Get Data:
+
+####set working directory.  
+```{r warning=FALSE, error=FALSE}
+########## YOU WILL HAVE TO CHANGE THE PATH ##########
+
+setwd("C:/Users/BAH/Documents/R_working_directory/Coursework/Machine_Learning")
+```  
+
+#download the dataset  
+```{r warning=FALSE, error=FALSE}
+training_data_URL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+test_data_URL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training_file <- "./data/pml-training.csv"
+
+test_file  <- "./data/pml-testing.csv"
+
+#the following if blocks are to prevent replication
+if (!file.exists("./data")) {
+dir.create("./data")
+}
+
+if (!file.exists(training_file)) {
+download.file(training_data_URL, destfile = training_file, method = "curl")
+}
+
+if (!file.exists(test_file)) {
+download.file(test_data_URL, destfile = test_file, method = "curl")
+}
+
+#remove url 
+rm(training_data_URL)
+
+rm(test_data_URL)
+```  
+
+##Reading Data:
+
+####read CSVs into dataframes  
+```{r warning=FALSE, error=FALSE}
+raw_training_data <- read.csv(training_file)
+
+raw_test_data <- read.csv(test_file)
+```  
+
+###print the dimensions of raw test dataframes for validation
+```{r warning=FALSE, error=FALSE}
+dim(raw_training_data)
+
+dim(raw_test_data)
+```  
+
+####remove files that have surved their purpose
+```{r warning=FALSE, error=FALSE}
+rm(training_file)
+
+rm(test_file)
+```  
+As can be seen by the output of the code block above showing the dimmensions of 
+
+
+
+##Cleaning Data:  
+
+In this stepthe dataset will be cleaned by removing observations with missing data and values that appear to have been entered incorrectly.  
+
+####create testing and trainig using near zero variance  
+```{r warning=FALSE, error=FALSE}
+NZV <- nearZeroVar(raw_training_data, saveMetrics = TRUE)
+
+head(NZV, 20)
+
+training1 <- raw_training_data[, !NZV$nzv]
+
+testing1 <- raw_test_data[, !NZV$nzv]
+```  
+
+####pringt dimensions of training1 and testing1 for confirmation
+```{r warning=FALSE, error=FALSE}
+dim(training1)
+
+dim(testing1)
+``` 
+
+```{r warning=FALSE, error=FALSE}
+rm(raw_training_data)
+
+rm(raw_test_data)
+
+rm(NZV)
+``` 
+
+
+####removing columns that are not part of the accelerometer measurements  
+```{r warning=FALSE, error=FALSE}
+regex <- grepl("^X|timestamp|user_name", names(training1))
+
+training <- training1[, !regex]
+
+testing <- testing1[, !regex]
+``` 
+
+####get the dimensions of testing and training for confirmation
+```{r warning=FALSE, error=FALSE}
+dim(training)
+
+dim(testing)
+``` 
+
+####remove unneeded elements
+```{r warning=FALSE, error=FALSE}
+rm(regex)
+
+rm(training1)
+
+rm(testing1)
+``` 
+
+#removing columns that contain na values  
+```{r warning=FALSE, error=FALSE}
+cond <- (colSums(is.na(training)) == 0)
+
+training <- training[, cond]
+
+testing <- testing[, cond]
+```  
+
+####remove undneeded element
+```{r warning=FALSE, error=FALSE}
+rm(cond)
+```  
+
+If all the above steps were completed sucessfully we should have a clean data set and be ready for analysis and generation of visual representations. 
+
+####generate correlation plot
+```{r warning=FALSE, error=FALSE}
+corrplot(cor(training[, -length(names(training))]), tl.cex = 0.5)
+```  
+
+
+
+##Partition Training Set:
+
+We have split the trainng set that has been cleaned into two segments one 30% validation set and one 70% trainig set.  We will now use the validation set to do cross comparisons.
+
+
+in the section code segment the observations will be devided into the following three segments:
+
+* Training Data: which contains the dim(training)[1] observations. 
+
+* Validation Data: which contains the dim(validation)[1] observations.
+
+* Testing Data: which contains the dim(testing)[1] observations. 
+
+####split training 
+```{r warning=FALSE, error=FALSE}
+set.seed(56789) # For reproducibile purpose
+
+inTrain <- createDataPartition(training$classe, p = 0.70, list = FALSE)
+
+validation <- training[-inTrain, ]
+
+training <- training[inTrain, ]
+```  
+
+####remove undeeded element
+```{r}
+rm(inTrain)
+```
+
+
+
+## Data Modelling  
+
+###Decision Tree:
+
+####createa decision tree
+```{r warning=FALSE, error=FALSE}
+tree <- rpart(classe ~ ., data = training, method = "class")
+
+prp(tree)
+```  
+
+The next step is to estimate the performance of the model base don the validation of the data set. 
+
+####perform evaluation
+```{r warning=FALSE, error=FALSE}
+prediction_tree <- predict(tree, validation, type = "class")
+
+confusionMatrix(validation$classe, prediction_tree)
+
+accuracy <- postResample(prediction_tree, validation$classe)
+
+ose <- 1 - as.numeric(confusionMatrix(validation$classe, prediction_tree)$overall[1])
+```  
+
+####Remove elements that are no longer needed
+```{r warning=FALSE, error=FALSE}
+rm(prediction_tree)
+
+rm(tree)
+```  
+ 
+
+###Random Forest:
+
+I chose to use a random forest due to its abilities to automatically select key variables.
+
+####perform evaluation 
+```{r warning=FALSE, error=FALSE}
+random_forest_model <- train(classe ~ ., data = training, method = "rf", trControl = trainControl(method = "cv", 5), ntree = 250)
+
+#show model
+random_forest_model
+```  
+
+####predict random forest
+```{r warning=FALSE, error=FALSE}
+predict_random_forest <- predict(random_forest_model, validation)
+
+confusionMatrix(validation$classe, predict_random_forest)
+
+accuracy <- postResample(predict_random_forest, validation$classe)
+
+ose <- 1 - as.numeric(confusionMatrix(validation$classe, predict_random_forest)$overall[1])
+
+```  
+
+####remove unneeded element
+```{r warning=FALSE, error=FALSE}
+rm(predict_random_forest)
+```
+As can be seen from the above output the random forest produced better results than expected 
+  
+  
+  
+##Predict The Type of Exercise Fot Test Set
+
+In the following section i applied the reandom forest model to the origional testing data set.  The only real change was that the unwanted column was removed prior. 
+
+
+####remove unwanted column
+```{r warning=FALSE, error=FALSE}
+rm(accuracy)
+
+rm(ose)
+``` 
+
+####perform prediction
+```{r warning=FALSE, error=FALSE}
+predict(random_forest_model, testing[, -length(names(testing))])
+```  
+
+
+
+##Generating Files to submit for marking:
+
+####generate required files for submission 
+```{r warning=FALSE, error=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  
+  for(i in 1:n){
+    filename = paste0("./Assignment_Solutions/problem_id_",i,".txt")
+    
+    write.table(x[i], file = filename, quote = FALSE, row.names = FALSE,
+                col.names = FALSE)
+  }
+}
+```  
+
+####generate files  
+```{r warning=FALSE, error=FALSE}
+pml_write_files(predict(random_forest_model, testing[, -length(names(testing))]))
+
+```  
+
+####remove uneccesary elements
+```{r warning=FALSE, error=FALSE}
+rm(random_forest_model)
+rm(training)
+rm(testing)
+rm(validation)
+rm(pml_write_files)
+```
